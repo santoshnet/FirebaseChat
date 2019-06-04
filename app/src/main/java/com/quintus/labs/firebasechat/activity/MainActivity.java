@@ -72,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
 
                 }
 
-                RecyclerviewAdapter recycler = new RecyclerviewAdapter(getApplicationContext(), list);
+                RecyclerviewAdapter recycler = new RecyclerviewAdapter(MainActivity.this, list);
                 RecyclerView.LayoutManager layoutmanager = new LinearLayoutManager(MainActivity.this);
                 recyclerview.setLayoutManager(layoutmanager);
                 recyclerview.setItemAnimator(new DefaultItemAnimator());
