@@ -46,15 +46,25 @@
         android:text="TextView"
         android:textSize="15dp" />
 
-    <!--ImageView
-        android:id="@+id/message_image_layout"
+    <RelativeLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignStart="@+id/message_text_layout"
         android:layout_below="@+id/message_text_layout"
-        android:layout_toEndOf="@+id/message_profile_layout"
-        android:scaleType="centerCrop"
-        /-->
+        android:layout_toEndOf="@+id/message_profile_layout">
+        <ImageView
+            android:id="@+id/message_image_layout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            />
+        <ProgressBar
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:id="@+id/image_loading"/>
+    </RelativeLayout>
+
 
 
 </RelativeLayout>

@@ -1,11 +1,15 @@
 package com.quintus.labs.firebasechat.activity;
 
+import android.Manifest;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.ActionBar;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -13,12 +17,15 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
@@ -33,6 +40,13 @@ import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
+import com.karumi.dexter.Dexter;
+import com.karumi.dexter.MultiplePermissionsReport;
+import com.karumi.dexter.PermissionToken;
+import com.karumi.dexter.listener.DexterError;
+import com.karumi.dexter.listener.PermissionRequest;
+import com.karumi.dexter.listener.PermissionRequestErrorListener;
+import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 import com.quintus.labs.firebasechat.R;
 import com.quintus.labs.firebasechat.adapter.MessageAdapter;
 import com.quintus.labs.firebasechat.model.Messages;
@@ -72,6 +86,9 @@ public class ChatActivity extends AppCompatActivity {
     private int itemPos = 0;
     private String mLastKey = "";
     private String mPrevKey = "";
+    private ImageButton imageBtn;
+    private static final String IMAGE_DIRECTORY = "/demonuts";
+    private int GALLERY = 1, CAMERA = 2;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,6 +97,14 @@ public class ChatActivity extends AppCompatActivity {
         mChatAddButton = findViewById(R.id.chatAddButton);
         mChatSendButton = findViewById(R.id.chatSendButton);
         mMessageView = findViewById(R.id.chatMessageView);
+        imageBtn = (ImageButton) findViewById(R.id.chatAddButton);
+        requestMultiplePermissions();
+        imageBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showPictureDialog();
+            }
+        });
 
         //-----GETING FROM INTENT----
         mChatUser = getIntent().getStringExtra("user_id");
@@ -123,21 +148,21 @@ public class ChatActivity extends AppCompatActivity {
         loadMessages();
 
         //----ADDING LAST SEEN-----
-        mRootReference.child("users").child(mChatUser).addValueEventListener(new ValueEventListener() {
+        mRootReference.child("Users").child(mChatUser).addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                String onlineValue = dataSnapshot.child("online").getValue().toString();
-                String imageValue = dataSnapshot.child("thumb_image").getValue().toString();
+                //String onlineValue = dataSnapshot.child("online").getValue().toString();
+                String imageValue = dataSnapshot.child("profileImage").getValue().toString();
 
                 Picasso.get().load(imageValue).placeholder(R.drawable.user).into(mUserImage);
-                if (onlineValue.equals("true")) {
+               /* if (onlineValue.equals("true")) {
                     mUserLastSeen.setText("online");
                 } else {
                     GetTimeAgo getTimeAgo = new GetTimeAgo();
                     long lastTime = Long.parseLong(onlineValue);
                     String lastSeen = GetTimeAgo.getTimeAgo(lastTime, getApplicationContext());
                     mUserLastSeen.setText(lastSeen);
-                }
+                }*/
             }
 
             @Override
@@ -256,6 +281,44 @@ public class ChatActivity extends AppCompatActivity {
         });
 
     }
+
+
+        private void showPictureDialog(){
+            AlertDialog.Builder pictureDialog = new AlertDialog.Builder(this);
+            pictureDialog.setTitle("Select Action");
+            String[] pictureDialogItems = {
+                    "Select photo from gallery",
+                    "Capture photo from camera" };
+            pictureDialog.setItems(pictureDialogItems,
+                    new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            switch (which) {
+                                case 0:
+                                    choosePhotoFromGallary();
+                                    break;
+                                case 1:
+                                    takePhotoFromCamera();
+                                    break;
+                            }
+                        }
+                    });
+            pictureDialog.show();
+        }
+
+    public void choosePhotoFromGallary() {
+        Intent galleryIntent = new Intent(Intent.ACTION_PICK,
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+
+        startActivityForResult(galleryIntent, GALLERY);
+    }
+
+    private void takePhotoFromCamera() {
+        Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        startActivityForResult(intent, CAMERA);
+    }
+
+
 
     //---FIRST 10 MESSAGES WILL LOAD ON START----
     private void loadMessages() {
@@ -379,56 +442,62 @@ public class ChatActivity extends AppCompatActivity {
                     .child(mCurrentUserId).child(mChatUser).push();
 
             final String push_id = user_message_push.getKey();
-
             //---PUSHING IMAGE INTO STORAGE---
-            final StorageReference filepath = mImageStorage.child("message_images").child(push_id + ".jpg");
-            filepath.putFile(imageUri).addOnCompleteListener(new OnCompleteListener<UploadTask.TaskSnapshot>() {
-                @Override
-                public void onComplete(@NonNull Task<UploadTask.TaskSnapshot> task) {
-
-                    if (task.isSuccessful()) {
-
-                        filepath.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+            final StorageReference filepath =
+                    FirebaseStorage.getInstance().getReference("message_images/" + System.currentTimeMillis() + ".jpg");
+            //final StorageReference filepath = mImageStorage.child("message_images").child(push_id + ".jpg");
+            if (imageUri != null) {
+                filepath.putFile(imageUri)
+                        .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
                             @Override
-                            public void onSuccess(Uri uri) {
+                            public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
 
-                                download_url = uri.toString();
-                                Log.d("IMAGE", download_url);
+
+                                filepath.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+                                    @Override
+                                    public void onSuccess(Uri uri) {
+                                        download_url = uri.toString();
+                                        Log.d("IMAGE", download_url);
+
+                                        Map messageMap = new HashMap();
+                                        messageMap.put("message", download_url);
+                                        messageMap.put("seen", false);
+                                        messageMap.put("type", "image");
+                                        messageMap.put("time", ServerValue.TIMESTAMP);
+                                        messageMap.put("from", mCurrentUserId);
+
+                                        Map messageUserMap = new HashMap();
+                                        messageUserMap.put(current_user_ref + "/" + push_id, messageMap);
+                                        messageUserMap.put(chat_user_ref + "/" + push_id, messageMap);
+
+                                        mRootReference.updateChildren(messageUserMap, new DatabaseReference.CompletionListener() {
+
+                                            @Override
+                                            public void onComplete(DatabaseError databaseError, DatabaseReference databaseReference) {
+                                                if (databaseError != null) {
+                                                    Log.e("CHAT_ACTIVITY", "Cannot add message to database");
+                                                } else {
+                                                    Toast.makeText(ChatActivity.this, "Message sent", Toast.LENGTH_SHORT).show();
+                                                    mMessageView.setText("");
+                                                }
+
+                                            }
+                                        });
+                                    }
+                                });
+
+                            }
+                        })
+                        .addOnFailureListener(new OnFailureListener() {
+                            @Override
+                            public void onFailure(@NonNull Exception e) {
+
+                                Toast.makeText(ChatActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
                             }
                         });
+            }
 
-                        @SuppressWarnings("VisibleForTests")
-
-
-                        Map messageMap = new HashMap();
-                        messageMap.put("message", download_url);
-                        messageMap.put("seen", false);
-                        messageMap.put("type", "image");
-                        messageMap.put("time", ServerValue.TIMESTAMP);
-                        messageMap.put("from", mCurrentUserId);
-
-                        Map messageUserMap = new HashMap();
-                        messageUserMap.put(current_user_ref + "/" + push_id, messageMap);
-                        messageUserMap.put(chat_user_ref + "/" + push_id, messageMap);
-
-                        mRootReference.updateChildren(messageUserMap, new DatabaseReference.CompletionListener() {
-
-                            @Override
-                            public void onComplete(DatabaseError databaseError, DatabaseReference databaseReference) {
-                                if (databaseError != null) {
-                                    Log.e("CHAT_ACTIVITY", "Cannot add message to database");
-                                } else {
-                                    Toast.makeText(ChatActivity.this, "Message sent", Toast.LENGTH_SHORT).show();
-                                    mMessageView.setText("");
-                                }
-
-                            }
-                        });
-                    }
-
-                }
-            });
-
+        }else if (requestCode == CAMERA && resultCode == RESULT_OK) {
 
         }
 
@@ -446,12 +515,44 @@ public class ChatActivity extends AppCompatActivity {
         // mDatabaseReference.child(mCurrentUserId).child("online").setValue(ServerValue.TIMESTAMP);
 
     }
+
+
+
+    private void  requestMultiplePermissions(){
+        Dexter.withActivity(this)
+                .withPermissions(
+                        Manifest.permission.CAMERA,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        Manifest.permission.READ_EXTERNAL_STORAGE)
+                .withListener(new MultiplePermissionsListener() {
+                    @Override
+                    public void onPermissionsChecked(MultiplePermissionsReport report) {
+                        // check if all permissions are granted
+                        if (report.areAllPermissionsGranted()) {
+                            Toast.makeText(getApplicationContext(), "All permissions are granted by user!", Toast.LENGTH_SHORT).show();
+                        }
+
+                        // check for permanent denial of any permission
+                        if (report.isAnyPermissionPermanentlyDenied()) {
+                            // show alert dialog navigating to Settings
+                            //openSettingsDialog();
+                        }
+                    }
+
+                    @Override
+                    public void onPermissionRationaleShouldBeShown(List<PermissionRequest> permissions, PermissionToken token) {
+                        token.continuePermissionRequest();
+                    }
+                }).
+                withErrorListener(new PermissionRequestErrorListener() {
+                    @Override
+                    public void onError(DexterError error) {
+                        Toast.makeText(getApplicationContext(), "Some Error! ", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .onSameThread()
+                .check();
+    }
 }
 
 
- /*
-            ActionBar action = getSupportActionBar();
-            LayoutInflater inflater = (LayoutInflater)this.getSystemService(LAYOUT_INFLATER_SERVICE);
-            View actionBarView = inflater.inflate(R.layout.app_bar_layout,null);
-            action.setCustomView(actionBarView);
-        */

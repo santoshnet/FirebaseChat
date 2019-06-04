@@ -9,6 +9,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -19,6 +20,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.quintus.labs.firebasechat.R;
 import com.quintus.labs.firebasechat.model.Messages;
+import com.squareup.picasso.Callback;
 import com.squareup.picasso.Picasso;
 
 import java.util.Calendar;
@@ -94,7 +96,26 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
 
             }
         });
-        holder.messageText.setText(mes.getMessage());
+
+
+        if(message_type.equalsIgnoreCase("image")){
+            holder.progressBar.setVisibility(View.VISIBLE);
+           Picasso.get().load(mes.getMessage()).error(R.drawable.no_image)
+                    .into(holder.messageImage, new Callback() {
+               @Override
+               public void onSuccess() {
+                   holder.progressBar.setVisibility(View.GONE);
+
+               }
+
+               @Override
+               public void onError(Exception e) {
+                 holder.progressBar.setVisibility(View.GONE);
+               }
+           });
+        }else {
+            holder.messageText.setText(mes.getMessage());
+        }
 
 
     }
@@ -113,6 +134,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
         public TextView displayTime;
         public CircleImageView profileImage;
         public ImageView messageImage;
+        ProgressBar progressBar;
 
 
         public MessageViewHolder(View itemView) {
@@ -122,7 +144,8 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
             displayName = itemView.findViewById(R.id.name_text_layout);
             displayTime = itemView.findViewById(R.id.time_text_layout);
             profileImage = itemView.findViewById(R.id.message_profile_layout);
-            // messageImage = (ImageView)itemView.findViewById(R.id.message_image_layout);
+            messageImage = (ImageView)itemView.findViewById(R.id.message_image_layout);
+            progressBar = (ProgressBar) itemView.findViewById(R.id.image_loading);
 
             context = itemView.getContext();
 
